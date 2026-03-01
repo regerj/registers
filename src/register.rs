@@ -73,7 +73,7 @@ impl Register {
     fn struct_impl(&self) -> ItemStruct {
         let ident = self.ident.clone();
         parse_quote! {
-            #[derive(Debug)]
+            #[derive(Debug, Clone)]
             pub struct #ident {
                 reg: u32,
             }

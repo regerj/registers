@@ -3,10 +3,26 @@ use registers::register;
 
 #[register]
 struct HIF1 {
-    #[field(signed = false, lsb = 0, msb = 15, write = false)]
+    #[field(lsb = 0, msb = 15, write = false)]
     lower: u32,
-    #[field(signed = false, lsb = 16, msb = 31)]
+    #[field(lsb = 16, msb = 31)]
     upper: u32,
+}
+
+#[register]
+struct Signed {
+    #[field(lsb = 0, msb = 15, signed = true)]
+    lower: u32,
+    #[field(lsb = 16, msb = 31)]
+    upper: u32,
+}
+
+#[register]
+struct NonStandardSigned {
+    #[field(lsb = 0, msb = 3, signed = true)]
+    lower_four: u32,
+    #[field(lsb = 4, msb = 31, signed = false)]
+    reserved: u32,
 }
 
 #[test]
@@ -67,4 +83,34 @@ fn test_clear() {
 fn test_eq() {
     let reg = HIF1::from(0xDEADBEEF);
     assert_eq!(reg, 0xDEADBEEF);
+}
+
+#[test]
+fn test_clone() {
+    let reg = HIF1::from(0xDEADBEEF);
+    assert_eq!(reg.clone(), 0xDEADBEEF);
+}
+
+#[test]
+fn test_signed() {
+    let mut reg = Signed::new();
+    assert!(reg.set_lower(i16::MIN.into()).is_ok());
+
+    assert_eq!(reg.get_upper(), 0);
+    assert_eq!(reg.get_lower(), i16::MIN.into());
+
+    assert!(reg.set_upper(u16::MAX.into()).is_ok());
+    assert_eq!(reg.get_upper(), u16::MAX.into());
+    assert_eq!(reg.get_lower(), i16::MIN.into());
+}
+
+#[test]
+fn test_nonstd_signed() {
+    let mut reg = NonStandardSigned::new();
+    assert!(reg.set_lower_four(-8).is_ok());
+
+    let raw: u32 = reg.clone().into();
+    println!("{:0>32b}", raw);
+    assert_eq!(reg.get_lower_four(), -8);
+    assert_eq!(reg.get_reserved(), 0);
 }
