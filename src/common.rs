@@ -60,10 +60,34 @@ impl Field {
 
     fn io_ty(&self, size: usize) -> Type {
         match size {
-            8 => if self.signed { parse_quote!(i8) } else { parse_quote!(u8) }
-            16 => if self.signed { parse_quote!(i16) } else { parse_quote!(u16) }
-            32 => if self.signed { parse_quote!(i32) } else { parse_quote!(u32) }
-            64 => if self.signed { parse_quote!(i64) } else { parse_quote!(u64) }
+            8 => {
+                if self.signed {
+                    parse_quote!(i8)
+                } else {
+                    parse_quote!(u8)
+                }
+            }
+            16 => {
+                if self.signed {
+                    parse_quote!(i16)
+                } else {
+                    parse_quote!(u16)
+                }
+            }
+            32 => {
+                if self.signed {
+                    parse_quote!(i32)
+                } else {
+                    parse_quote!(u32)
+                }
+            }
+            64 => {
+                if self.signed {
+                    parse_quote!(i64)
+                } else {
+                    parse_quote!(u64)
+                }
+            }
             _ => panic!("Invalid register size"),
         }
     }
