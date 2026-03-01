@@ -31,6 +31,7 @@ impl Register {
         let from_impl = self.from_impl();
         let into_impl = self.into_impl();
         let clear_impl = self.clear_impl();
+        let eq_raw_impl = self.eq_raw_impl();
         parse_quote! {
             mod #mod_ident {
                 #struct_impl
@@ -42,14 +43,15 @@ impl Register {
                 }
                 #from_impl
                 #into_impl
+                #eq_raw_impl
             }
         }
     }
 
     fn new_impl(&self) -> ItemFn {
         parse_quote! {
-            pub fn new(reg: u32) -> Self {
-                Self { reg }
+            pub fn new() -> Self {
+                Self { reg: 0 }
             }
         }
     }
@@ -77,6 +79,7 @@ impl Register {
     fn struct_impl(&self) -> ItemStruct {
         let ident = self.ident.clone();
         parse_quote! {
+            #[derive(Debug)]
             pub struct #ident {
                 reg: u32,
             }
@@ -108,6 +111,17 @@ impl Register {
             impl Into<u32> for #ident {
                 fn into(self) -> u32 {
                     self.reg
+                }
+            }
+        }
+    }
+
+    fn eq_raw_impl(&self) -> ItemImpl {
+        let ident = self.ident.clone();
+        parse_quote! {
+            impl PartialEq<u32> for #ident {
+                fn eq(&self, other: &u32) -> bool {
+                    self.reg == *other
                 }
             }
         }

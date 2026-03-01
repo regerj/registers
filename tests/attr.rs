@@ -11,7 +11,7 @@ struct HIF1 {
 
 #[test]
 pub fn test_attr() -> Result<()> {
-    let mut reg = HIF1::new(0xDEADBEEF);
+    let mut reg = HIF1::from(0xDEADBEEF);
     let upper = reg.get_upper();
     let lower = reg.get_lower();
 
@@ -32,6 +32,12 @@ pub fn test_attr() -> Result<()> {
 }
 
 #[test]
+fn test_new() {
+    let reg = HIF1::new();
+    assert_eq!(reg, 0);
+}
+
+#[test]
 fn test_from() {
     let reg: HIF1 = 0xDEADBEEF.into();
 
@@ -46,13 +52,19 @@ fn test_from() {
 
 #[test]
 fn test_into() {
-    let reg = HIF1::new(0xDEADBEEF);
+    let reg = HIF1::from(0xDEADBEEF);
     assert_eq!(<HIF1 as Into<u32>>::into(reg), 0xDEADBEEF);
 }
 
 #[test]
 fn test_clear() {
-    let mut reg = HIF1::new(0xDEADBEEF);
+    let mut reg = HIF1::from(0xDEADBEEF);
     reg.clear();
     assert_eq!(<HIF1 as Into<u32>>::into(reg), 0);
+}
+
+#[test]
+fn test_eq() {
+    let reg = HIF1::from(0xDEADBEEF);
+    assert_eq!(reg, 0xDEADBEEF);
 }
