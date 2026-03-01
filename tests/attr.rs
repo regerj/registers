@@ -113,4 +113,18 @@ fn test_nonstd_signed() {
     println!("{:0>32b}", raw);
     assert_eq!(reg.get_lower_four(), -8);
     assert_eq!(reg.get_reserved(), 0);
+
+    assert!(reg.set_lower_four(-5).is_ok());
+
+    let raw: u32 = reg.clone().into();
+    println!("{:0>32b}", raw);
+    assert_eq!(reg.get_lower_four(), -5);
+    assert_eq!(reg.get_reserved(), 0);
+
+    assert!(reg.set_lower_four(7).is_ok());
+
+    let raw: u32 = reg.clone().into();
+    println!("{:0>32b}", raw);
+    assert_eq!(reg.get_lower_four(), 7);
+    assert_eq!(reg.get_reserved(), 0);
 }
