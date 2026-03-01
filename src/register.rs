@@ -3,22 +3,23 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, ItemFn, ItemImpl, ItemMod, ItemStruct, parse_quote};
 
-use crate::common::Field;
+use crate::{MacroArgs, common::Field};
 
 pub struct Register {
     ident: Ident,
     fields: Vec<Field>,
+    args: MacroArgs,
 }
 
 impl Register {
-    pub fn new(item: ItemStruct) -> Self {
+    pub fn new(item: ItemStruct, args: MacroArgs) -> Self {
         let ident = item.ident;
         let fields: Vec<_> = item
             .fields
             .iter()
             .map(|field| Field::from_field(field).unwrap())
             .collect();
-        Self { ident, fields }
+        Self { ident, fields, args }
     }
 
     fn mod_impl(&self) -> ItemMod {
@@ -32,6 +33,9 @@ impl Register {
         let into_impl = self.into_impl();
         let clear_impl = self.clear_impl();
         let eq_raw_impl = self.eq_raw_impl();
+        let read_impl = self.read_impl();
+        let write_impl = self.write_impl();
+        let raw_impl = self.raw_impl();
         parse_quote! {
             mod #mod_ident {
                 #struct_impl
@@ -40,6 +44,9 @@ impl Register {
                     #clear_impl
                     #( #get_impls )*
                     #( #set_impls )*
+                    #raw_impl
+                    #read_impl
+                    #write_impl
                 }
                 #from_impl
                 #into_impl
@@ -53,6 +60,38 @@ impl Register {
             pub fn new() -> Self {
                 Self { reg: 0 }
             }
+        }
+    }
+
+    fn read_impl(&self) -> Option<ItemFn> {
+        if self.args.read {
+            Some(parse_quote! {
+                pub unsafe fn read(&mut self, addr: *const u32) {
+                    self.reg = core::ptr::read_volatile(addr);
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    fn raw_impl(&self) -> ItemFn {
+        parse_quote! {
+            pub fn raw(&self) -> u32 {
+                self.reg
+            }
+        }
+    }
+
+    fn write_impl(&self) -> Option<ItemFn> {
+        if self.args.write {
+            Some(parse_quote! {
+                pub unsafe fn write(&self, addr: *mut u32) {
+                    core::ptr::write_volatile(addr, self.reg);
+                }
+            })
+        } else {
+            None
         }
     }
 

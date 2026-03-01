@@ -9,9 +9,9 @@ pub struct Field {
     pub signed: bool,
     pub msb: usize,
     pub lsb: usize,
-    #[darling(default = "_true")]
+    #[darling(default = _true)]
     pub write: bool,
-    #[darling(default = "_true")]
+    #[darling(default = _true)]
     pub read: bool,
 }
 

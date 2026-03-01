@@ -3,7 +3,7 @@ use registers::register;
 
 #[register]
 struct HIF1 {
-    #[field(lsb = 0, msb = 15, write = false)]
+    #[field(lsb = 0, msb = 15)]
     lower: u32,
     #[field(lsb = 16, msb = 31)]
     upper: u32,
@@ -127,4 +127,30 @@ fn test_nonstd_signed() {
     println!("{:0>32b}", raw);
     assert_eq!(reg.get_lower_four(), 7);
     assert_eq!(reg.get_reserved(), 0);
+}
+
+#[test]
+fn test_read() {
+    let some_value: u32 = 0xDEADBEEF;
+    let addr = &some_value as *const u32;
+
+    let mut reg = HIF1::new();
+    unsafe { reg.read(addr); }
+
+    assert_eq!(reg.get_upper(), 0xDEAD);
+    assert_eq!(reg.get_lower(), 0xBEEF);
+}
+
+#[test]
+fn test_write() {
+    let mut some_value: u32 = 0;
+    let addr = &mut some_value as *mut u32;
+
+    let mut reg = HIF1::new();
+    reg.set_upper(0xDEAD).expect("Could not fit into bounds");
+    reg.set_lower(0xBEEF).expect("Could not fit into bounds");
+
+    unsafe { reg.write(addr); }
+
+    assert_eq!(some_value, 0xDEADBEEF);
 }
