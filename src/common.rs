@@ -8,6 +8,14 @@ pub struct Field {
     pub signed: bool,
     pub msb: usize,
     pub lsb: usize,
+    #[darling(default = "_true")]
+    pub write: bool,
+    #[darling(default = "_true")]
+    pub read: bool,
+}
+
+fn _true() -> bool {
+    true
 }
 
 impl Field {
@@ -20,7 +28,6 @@ impl Field {
         let field_mask = 2u32.pow(field_size as u32) - 1;
 
         let fn_ident = format_ident!("get_{ident}");
-        //let ty = if self.signed { parse_quote! { u#size } }
         parse_quote! {
             pub fn #fn_ident(&self) -> #ty {
                 let end_trimmed = self.reg >> #lsb;

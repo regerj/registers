@@ -3,7 +3,7 @@ use registers::register;
 
 #[register]
 struct HIF1 {
-    #[field(signed = false, lsb = 0, msb = 15)]
+    #[field(signed = false, lsb = 0, msb = 15, write = false)]
     lower: u32,
     #[field(signed = false, lsb = 16, msb = 31)]
     upper: u32,

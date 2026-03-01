@@ -55,11 +55,23 @@ impl Register {
     }
 
     fn get_impls(&self) -> Vec<ItemFn> {
-        self.fields.iter().map(|f| f.get_impl(32)).collect()
+        self.fields.iter().filter_map(|f| {
+            if f.read {
+                Some(f.get_impl(32))
+            } else {
+                None
+            }
+        }).collect()
     }
 
     fn set_impls(&self) -> Vec<ItemFn> {
-        self.fields.iter().map(|f| f.set_impl(32)).collect()
+        self.fields.iter().filter_map(|f| {
+            if f.write {
+                Some(f.set_impl(32))
+            } else {
+                None
+            }
+        }).collect()
     }
 
     fn struct_impl(&self) -> ItemStruct {
