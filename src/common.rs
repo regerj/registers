@@ -69,6 +69,15 @@ impl Field {
     }
 
     pub fn set_impl(&self, size: usize) -> ItemFn {
+        if self.signed {
+            self.signed_set_impl(size)
+        } else {
+            self.unsigned_set_impl(size)
+        }
+    }
+
+    fn unsigned_set_impl(&self, size: usize) -> ItemFn {
+        assert!(!self.signed);
         let ty = self.io_ty(size);
         let ident = self.ident.clone().expect("Field ident expected");
         let fn_ident = format_ident!("set_{ident}");
@@ -76,35 +85,43 @@ impl Field {
         let field_max = 2u32.pow(field_size as u32) - 1;
         let field_mask = 2u32.pow(field_size as u32) - 1;
         let lsb = self.lsb;
-        let msb = self.msb;
-        if self.signed {
-            parse_quote! {
-                pub fn #fn_ident(&mut self, mut val: #ty) -> std::result::Result<(), String> {
-                    let signed_bit = if val < 0 {
-                        1 << #msb
-                    } else {
-                        0
-                    };
-                    val = val.abs();
-
-                    self.reg = self.reg & !(#field_mask << #lsb);
-                    self.reg = self.reg | signed_bit | val as u32;
-
-                    Ok(())
+        parse_quote! {
+            pub fn #fn_ident(&mut self, val: #ty) -> std::result::Result<(), String> {
+                if val > #field_max {
+                    return Err("".to_string());
                 }
+                self.reg = self.reg & !(#field_mask << #lsb);
+                let val = val << #lsb;
+                self.reg = self.reg | val;
+
+                Ok(())
             }
-        } else {
-            parse_quote! {
-                pub fn #fn_ident(&mut self, val: #ty) -> std::result::Result<(), String> {
-                    if val > #field_max {
-                        return Err("".to_string());
-                    }
-                    self.reg = self.reg & !(#field_mask << #lsb);
-                    let val = val << #lsb;
-                    self.reg = self.reg | val;
+        }
+    }
 
-                    Ok(())
-                }
+    fn signed_set_impl(&self, size: usize) -> ItemFn {
+        assert!(self.signed);
+        let ty = self.io_ty(size);
+        let ident = self.ident.clone().expect("Field ident expected");
+        let fn_ident = format_ident!("set_{ident}");
+        let field_size = self.msb - self.lsb + 1;
+        let field_mask = 2u32.pow(field_size as u32) - 1;
+        let lsb = self.lsb;
+        let msb = self.msb;
+
+        parse_quote! {
+            pub fn #fn_ident(&mut self, mut val: #ty) -> std::result::Result<(), String> {
+                let signed_bit = if val < 0 {
+                    1 << #msb
+                } else {
+                    0
+                };
+                val = val.abs();
+
+                self.reg = self.reg & !(#field_mask << #lsb);
+                self.reg = self.reg | signed_bit | val as u32;
+
+                Ok(())
             }
         }
     }
