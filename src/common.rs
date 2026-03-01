@@ -21,37 +21,49 @@ fn _true() -> bool {
 
 impl Field {
     pub fn get_impl(&self, size: usize) -> ItemFn {
+        if self.signed {
+            self.signed_get_impl(size)
+        } else {
+            self.unsigned_get_impl(size)
+        }
+    }
+
+    fn signed_get_impl(&self, size: usize) -> ItemFn {
+        assert!(self.signed);
         let ident = self.ident.clone().expect("Field ident expected");
+        let fn_ident = format_ident!("get_{ident}");
+        let lsb = self.lsb;
+        let msb = self.msb;
+        let field_size = msb - lsb + 1;
+        let field_mask = 2u32.pow(field_size as u32 - 1) - 1;
+        let filler = (2u32.pow(size as u32 - field_size as u32) - 1) << (field_size - 1);
+        let ty = self.io_ty(size);
+
+        parse_quote! {
+            pub fn #fn_ident(&self) -> #ty {
+                let signed = (self.reg >> #msb) & 1;
+                if signed == 1 {
+                    ((signed << (#size - 1)) | #filler | self.reg & ((#field_mask << #lsb) >> #lsb)) as #ty
+                } else {
+                    (self.reg & ((#field_mask << #lsb) >> #lsb)) as #ty
+                }
+            }
+        }
+    }
+
+    fn unsigned_get_impl(&self, size: usize) -> ItemFn {
+        assert!(!self.signed);
+        let ident = self.ident.clone().expect("Field ident expected");
+        let fn_ident = format_ident!("get_{ident}");
         let ty = self.io_ty(size);
         let lsb = self.lsb;
         let msb = self.msb;
         let field_size = msb - lsb + 1;
-        let field_mask = if self.signed {
-            2u32.pow(field_size as u32 - 1) - 1
-        } else {
-            2u32.pow(field_size as u32) - 1
-        };
-
-        let filler = (2u32.pow(size as u32 - field_size as u32) - 1) << (field_size - 1);
-
-        let fn_ident = format_ident!("get_{ident}");
-        if self.signed {
-            parse_quote! {
-                pub fn #fn_ident(&self) -> #ty {
-                    let signed = (self.reg >> #msb) & 1;
-                    if signed == 1 {
-                        ((signed << (#size - 1)) | #filler | self.reg & ((#field_mask << #lsb) >> #lsb)) as #ty
-                    } else {
-                        (self.reg & ((#field_mask << #lsb) >> #lsb)) as #ty
-                    }
-                }
-            }
-        } else {
-            parse_quote! {
-                pub fn #fn_ident(&self) -> #ty {
-                    let end_trimmed = self.reg >> #lsb;
-                    end_trimmed & #field_mask
-                }
+        let field_mask = 2u32.pow(field_size as u32) - 1;
+        parse_quote! {
+            pub fn #fn_ident(&self) -> #ty {
+                let end_trimmed = self.reg >> #lsb;
+                end_trimmed & #field_mask
             }
         }
     }
