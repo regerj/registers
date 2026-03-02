@@ -6,7 +6,7 @@ use crate::register::Register;
 mod common;
 mod register;
 
-const SUPPORTED_WIDTHS: [usize; 4] = [8usize, 16usize, 32usize, 64usize];
+const SUPPORTED_WIDTHS: [usize; 1] = [32usize];
 
 #[derive(Debug, darling::FromMeta)]
 #[darling(and_then = verify_args)]
