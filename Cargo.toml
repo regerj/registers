@@ -22,5 +22,5 @@ categories = [ "embedded", "hardware-support", "no-std::no-alloc" ]
 readme = "README.md"
 
 [dependencies]
-register-macros = { version = "0.1.0", path = "./register-macros/" }
+register-macros = { version = "0.0.1", path = "./register-macros/" }
 thiserror = "2.0.18"
