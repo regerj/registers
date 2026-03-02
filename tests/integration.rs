@@ -167,6 +167,5 @@ fn test_write() {
 
 #[test]
 fn test_size() {
-    println!("{:#04X}", 0xDEADBEEFu32);
     assert_eq!(size_of::<HIF1>(), size_of::<u32>());
 }
