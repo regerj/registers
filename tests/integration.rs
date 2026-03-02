@@ -1,27 +1,27 @@
 use registers::register;
 
-#[register]
+#[register(size = 32)]
 struct HIF1 {
     #[field(lsb = 0, msb = 15)]
-    lower: u32,
+    lower: u,
     #[field(lsb = 16, msb = 31)]
-    upper: u32,
+    upper: u,
 }
 
-#[register]
+#[register(size = 32)]
 struct Signed {
-    #[field(lsb = 0, msb = 15, signed = true)]
-    lower: u32,
+    #[field(lsb = 0, msb = 15)]
+    lower: i,
     #[field(lsb = 16, msb = 31)]
-    upper: u32,
+    upper: u,
 }
 
-#[register]
+#[register(size = 32)]
 struct NonStandardSigned {
-    #[field(lsb = 0, msb = 3, signed = true)]
-    lower_four: u32,
-    #[field(lsb = 4, msb = 31, signed = false)]
-    reserved: u32,
+    #[field(lsb = 0, msb = 3)]
+    lower_four: i,
+    #[field(lsb = 4, msb = 31)]
+    reserved: u,
 }
 
 #[test]

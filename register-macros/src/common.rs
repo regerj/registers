@@ -1,40 +1,75 @@
-use quote::format_ident;
+use darling::FromField;
+use quote::{ToTokens, format_ident};
 use syn::{Ident, ItemFn, Type, parse_quote};
 
-#[derive(darling::FromField, Default)]
-#[darling(attributes(field))]
+#[derive(FromField)]
+#[darling(attributes(field), and_then = finish)]
 pub struct Field {
     pub ident: Option<syn::Ident>,
-    #[darling(default)]
+    ty: syn::Type,
+    #[darling(skip)]
     pub signed: bool,
     pub msb: usize,
     pub lsb: usize,
-    #[darling(default = _true)]
+    #[darling(default = || true)]
     pub write: bool,
-    #[darling(default = _true)]
+    #[darling(default = || true)]
     pub read: bool,
 }
 
-fn _true() -> bool {
-    true
+fn finish(mut field: Field) -> darling::Result<Field> {
+    let error = Err(
+        darling::Error::unexpected_type(&field.ty.to_token_stream().to_string())
+            .with_span(&field.ty),
+    );
+    let signed = match &field.ty {
+        Type::Path(path) => {
+            if path.path.is_ident("u") {
+                false
+            } else if path.path.is_ident("i") {
+                true
+            } else {
+                return error;
+            }
+        }
+        _ => return error,
+    };
+
+    field.signed = signed;
+
+    Ok(field)
+}
+
+impl Default for Field {
+    fn default() -> Self {
+        Self {
+            ident: None,
+            ty: parse_quote!(u),
+            signed: false,
+            msb: 15,
+            lsb: 0,
+            write: true,
+            read: true,
+        }
+    }
 }
 
 impl Field {
-    pub fn get_impl(&self, size: usize) -> ItemFn {
+    pub fn get_impl(&self, reg_size: usize) -> ItemFn {
         if self.signed {
-            self.signed_get_impl(size)
+            self.signed_get_impl(reg_size)
         } else {
-            self.unsigned_get_impl(size)
+            self.unsigned_get_impl(reg_size)
         }
     }
 
-    fn signed_get_impl(&self, size: usize) -> ItemFn {
+    fn signed_get_impl(&self, reg_size: usize) -> ItemFn {
         assert!(self.signed);
         let fn_ident = self.get_fn_ident();
         let lsb = self.lsb;
         let msb = self.msb;
         let abs_field_mask = self.signed_field_mask_nosignbit();
-        let ty = self.io_ty(size);
+        let ty = self.io_ty(reg_size);
 
         parse_quote! {
             pub fn #fn_ident(&self) -> #ty {
@@ -48,10 +83,10 @@ impl Field {
         }
     }
 
-    fn unsigned_get_impl(&self, size: usize) -> ItemFn {
+    fn unsigned_get_impl(&self, reg_size: usize) -> ItemFn {
         assert!(!self.signed);
         let fn_ident = self.get_fn_ident();
-        let ty = self.io_ty(size);
+        let ty = self.io_ty(reg_size);
         let lsb = self.lsb;
         let field_mask = self.field_mask();
         parse_quote! {
@@ -61,11 +96,11 @@ impl Field {
         }
     }
 
-    pub fn set_impl(&self, size: usize) -> ItemFn {
+    pub fn set_impl(&self, reg_size: usize) -> ItemFn {
         if self.signed {
-            self.signed_set_impl(size)
+            self.signed_set_impl(reg_size)
         } else {
-            self.unsigned_set_impl(size)
+            self.unsigned_set_impl(reg_size)
         }
     }
 
@@ -74,9 +109,9 @@ impl Field {
         self.field_mask() & !(1 << self.msb)
     }
 
-    fn unsigned_set_impl(&self, size: usize) -> ItemFn {
+    fn unsigned_set_impl(&self, reg_size: usize) -> ItemFn {
         assert!(!self.signed);
-        let ty = self.io_ty(size);
+        let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_max = self.field_max();
         let field_mask = self.field_mask();
@@ -95,9 +130,9 @@ impl Field {
         }
     }
 
-    fn signed_set_impl(&self, size: usize) -> ItemFn {
+    fn signed_set_impl(&self, reg_size: usize) -> ItemFn {
         assert!(self.signed);
-        let ty = self.io_ty(size);
+        let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_mask = self.field_mask();
         let abs_field_mask = self.signed_field_mask_nosignbit();
@@ -158,8 +193,8 @@ impl Field {
         (2u32.pow(self.field_size() as u32) - 1) << self.lsb
     }
 
-    fn io_ty(&self, size: usize) -> Type {
-        match size {
+    fn io_ty(&self, reg_size: usize) -> Type {
+        match reg_size {
             8 => {
                 if self.signed {
                     parse_quote!(i8)
@@ -290,5 +325,26 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(field.signed_field_mask_nosignbit(), 0b0_1111_1100_0000_0000);
+    }
+
+    #[test]
+    fn test_from_field() {
+        let field: syn::Field = parse_quote! {
+            #[field(lsb = 0, msb = 15)]
+            foo: i
+        };
+
+        let field = Field::from_field(&field).expect("Failed to parse");
+        assert_eq!(field.ident.map(|i| i.to_string()), Some("foo".to_string()));
+        assert_eq!(field.lsb, 0);
+        assert_eq!(field.msb, 15);
+        assert!(field.signed);
+
+        let field: syn::Field = parse_quote! {
+            #[field(lsb = 0, msb = 15)]
+            foo: i32
+        };
+
+        assert!(Field::from_field(&field).is_err());
     }
 }

@@ -3,8 +3,8 @@ name = "register-macros"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
+license.workspace = true
 edition = "2024"
-license = "MIT"
 
 [lib]
 proc-macro = true

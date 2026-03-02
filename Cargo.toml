@@ -6,14 +6,15 @@ members = [ "register-macros" ]
 version = "0.1.0"
 authors = [ "Jacob Reger <regerjacob@gmail.com>" ]
 description = "A simple library for working with registers in Rust."
+license = "MIT"
 
 [package]
 name = "registers"
+edition = "2024"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-edition = "2024"
-license = "MIT"
+license.workspace = true
 
 [dependencies]
 register-macros = { version = "0.1.0", path = "./register-macros/" }

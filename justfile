@@ -15,4 +15,4 @@ clippy:
     @cargo clippy -- -D warnings
 
 # Publish the code
-publish:
+# publish:
