@@ -1,39 +1,12 @@
-use darling::{FromMeta, ast::NestedMeta};
-use syn::{ItemStruct, parse_macro_input};
+#![no_std]
 
-use crate::register::Register;
+pub use register_macros::*;
+use thiserror::Error;
 
-mod common;
-mod register;
-
-fn _true() -> bool {
-    true
+#[derive(Error, Debug, PartialEq)]
+pub enum Error {
+    #[error("Field write out of bounds")]
+    OutOfBoundsFieldWrite,
 }
 
-#[derive(Debug, darling::FromMeta)]
-#[darling(default)]
-struct MacroArgs {
-    #[darling(default = _true)]
-    read: bool,
-
-    #[darling(default = _true)]
-    write: bool,
-}
-
-impl Default for MacroArgs {
-    fn default() -> Self {
-        Self { read: true, write: true }
-    }
-}
-
-#[proc_macro_attribute]
-pub fn register(
-    _attr: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let nested_meta = NestedMeta::parse_meta_list(_attr.into()).unwrap();
-    let macro_args = MacroArgs::from_list(&nested_meta).unwrap();
-    let strct = parse_macro_input!(item as ItemStruct);
-    let reg = Register::new(strct, macro_args);
-    reg.implement().into()
-}
+pub type Result<T> = core::result::Result<T, Error>;

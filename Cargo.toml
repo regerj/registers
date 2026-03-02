@@ -1,14 +1,20 @@
+[workspace]
+resolver = "3"
+members = [ "register-macros" ]
+
+[workspace.package]
+version = "0.1.0"
+authors = [ "Jacob Reger <regerjacob@gmail.com>" ]
+description = "A simple library for working with registers in Rust."
+
 [package]
 name = "registers"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
 edition = "2024"
-
-[lib]
-proc-macro = true
+license = "MIT"
 
 [dependencies]
-anyhow = "1.0.102"
-darling = "0.23.0"
-proc-macro2 = "1.0.106"
-quote = "1.0.44"
-syn = "2.0.117"
+register-macros = { version = "0.1.0", path = "./register-macros/" }
+thiserror = "2.0.18"

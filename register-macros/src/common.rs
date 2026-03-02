@@ -82,9 +82,9 @@ impl Field {
         let field_mask = self.field_mask();
         let lsb = self.lsb;
         parse_quote! {
-            pub fn #fn_ident(&mut self, val: #ty) -> std::result::Result<(), String> {
+            pub fn #fn_ident(&mut self, val: #ty) -> registers::Result<()> {
                 if val > #field_max {
-                    return Err("".to_string());
+                    return Err(registers::Error::OutOfBoundsFieldWrite);
                 }
 
                 self.reg = self.reg & !(#field_mask);
@@ -107,9 +107,9 @@ impl Field {
         let field_min = self.field_min();
 
         parse_quote! {
-            pub fn #fn_ident(&mut self, mut val: #ty) -> std::result::Result<(), String> {
+            pub fn #fn_ident(&mut self, mut val: #ty) -> registers::Result<()> {
                 if val > #field_max as i32 || val < #field_min {
-                    return Err("".to_string());
+                    return Err(registers::Error::OutOfBoundsFieldWrite);
                 }
 
                 let signed_bit = if val < 0 {

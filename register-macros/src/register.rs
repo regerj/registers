@@ -19,7 +19,11 @@ impl Register {
             .iter()
             .map(|field| Field::from_field(field).unwrap())
             .collect();
-        Self { ident, fields, args }
+        Self {
+            ident,
+            fields,
+            args,
+        }
     }
 
     fn mod_impl(&self) -> ItemMod {
@@ -126,7 +130,7 @@ impl Register {
             }
         }
     }
-
+    #[allow(clippy::wrong_self_convention)]
     fn from_impl(&self) -> ItemImpl {
         let ident = self.ident.clone();
         parse_quote! {
@@ -138,6 +142,7 @@ impl Register {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn into_impl(&self) -> ItemImpl {
         let ident = self.ident.clone();
         parse_quote! {
