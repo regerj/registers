@@ -1,8 +1,5 @@
 # Registers
 
-> [!WARNING]
-> This crate is a work in progress. Currently, only 32 bit registers are supported.
-
 This crate is a simple procedural macro based crate for working with registers. The goal is to make supporting complex register fields as intuitive and safe as possible.
 
 ## Quickstart

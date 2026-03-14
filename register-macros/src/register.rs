@@ -3,7 +3,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, ItemFn, ItemImpl, ItemMod, ItemStruct, parse_quote};
 
-use crate::{MacroArgs, common::Field};
+use crate::{MacroArgs, field::Field, util::unsign};
 
 pub struct Register {
     ident: Ident,
@@ -68,10 +68,11 @@ impl Register {
     }
 
     fn read_impl(&self) -> Option<ItemFn> {
+        let inner_ty = self.inner_type();
         if self.args.read {
             Some(parse_quote! {
-                pub unsafe fn read(&mut self, addr: *const u32) {
-                    self.reg = core::ptr::read_volatile(addr);
+                pub unsafe fn read(&mut self, addr: *const #inner_ty) {
+                    unsafe { self.reg = core::ptr::read_volatile(addr) }
                 }
             })
         } else {
@@ -80,18 +81,20 @@ impl Register {
     }
 
     fn raw_impl(&self) -> ItemFn {
+        let inner_ty = self.inner_type();
         parse_quote! {
-            pub fn raw(&self) -> u32 {
+            pub fn raw(&self) -> #inner_ty {
                 self.reg
             }
         }
     }
 
     fn write_impl(&self) -> Option<ItemFn> {
+        let inner_ty = self.inner_type();
         if self.args.write {
             Some(parse_quote! {
-                pub unsafe fn write(&self, addr: *mut u32) {
-                    core::ptr::write_volatile(addr, self.reg);
+                pub unsafe fn write(&self, addr: *mut #inner_ty) {
+                    unsafe { core::ptr::write_volatile(addr, self.reg) }
                 }
             })
         } else {
@@ -102,23 +105,36 @@ impl Register {
     fn get_impls(&self) -> Vec<ItemFn> {
         self.fields
             .iter()
-            .filter_map(|f| if f.read { Some(f.get_impl(32)) } else { None })
+            .filter_map(|f| {
+                if f.read {
+                    Some(f.get_impl(self.args.size))
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
     fn set_impls(&self) -> Vec<ItemFn> {
         self.fields
             .iter()
-            .filter_map(|f| if f.write { Some(f.set_impl(32)) } else { None })
+            .filter_map(|f| {
+                if f.write {
+                    Some(f.set_impl(self.args.size))
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
     fn struct_impl(&self) -> ItemStruct {
         let ident = self.ident.clone();
+        let inner_ty = self.inner_type();
         parse_quote! {
             #[derive(Debug, Clone)]
             pub struct #ident {
-                reg: u32,
+                reg: #inner_ty,
             }
         }
     }
@@ -133,9 +149,10 @@ impl Register {
     #[allow(clippy::wrong_self_convention)]
     fn from_impl(&self) -> ItemImpl {
         let ident = self.ident.clone();
+        let inner_ty = self.inner_type();
         parse_quote! {
-            impl From<u32> for #ident {
-                fn from(value: u32) -> Self {
+            impl From<#inner_ty> for #ident {
+                fn from(value: #inner_ty) -> Self {
                     Self { reg: value }
                 }
             }
@@ -145,9 +162,10 @@ impl Register {
     #[allow(clippy::wrong_self_convention)]
     fn into_impl(&self) -> ItemImpl {
         let ident = self.ident.clone();
+        let inner_ty = self.inner_type();
         parse_quote! {
-            impl Into<u32> for #ident {
-                fn into(self) -> u32 {
+            impl Into<#inner_ty> for #ident {
+                fn into(self) -> #inner_ty {
                     self.reg
                 }
             }
@@ -156,9 +174,10 @@ impl Register {
 
     fn eq_raw_impl(&self) -> ItemImpl {
         let ident = self.ident.clone();
+        let inner_ty = self.inner_type();
         parse_quote! {
-            impl PartialEq<u32> for #ident {
-                fn eq(&self, other: &u32) -> bool {
+            impl PartialEq<#inner_ty> for #ident {
+                fn eq(&self, other: &#inner_ty) -> bool {
                     self.reg == *other
                 }
             }
@@ -176,5 +195,9 @@ impl Register {
             #mod_impl
             pub use #mod_ident::*;
         }
+    }
+
+    fn inner_type(&self) -> syn::Type {
+        unsign(self.args.size)
     }
 }

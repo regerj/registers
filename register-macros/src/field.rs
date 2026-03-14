@@ -2,6 +2,112 @@ use darling::FromField;
 use quote::{ToTokens, format_ident};
 use syn::{Ident, ItemFn, Type, parse_quote};
 
+use crate::util::{sign, unsign};
+
+#[derive(Debug)]
+enum Number {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+}
+
+impl PartialEq<u128> for Number {
+    fn eq(&self, other: &u128) -> bool {
+        match self {
+            Number::U8(n) => *n as u128 == *other,
+            Number::U16(n) => *n as u128 == *other,
+            Number::U32(n) => *n as u128 == *other,
+            Number::U64(n) => *n as u128 == *other,
+            Number::U128(n) => *n as u128 == *other,
+            Number::I8(n) => {
+                if *n < 0 {
+                    false
+                } else {
+                    *n as u128 == *other
+                }
+            }
+            Number::I16(n) => {
+                if *n < 0 {
+                    false
+                } else {
+                    *n as u128 == *other
+                }
+            }
+            Number::I32(n) => {
+                if *n < 0 {
+                    false
+                } else {
+                    *n as u128 == *other
+                }
+            }
+            Number::I64(n) => {
+                if *n < 0 {
+                    false
+                } else {
+                    *n as u128 == *other
+                }
+            }
+            Number::I128(n) => {
+                if *n < 0 {
+                    false
+                } else {
+                    *n as u128 == *other
+                }
+            }
+        }
+    }
+}
+
+impl PartialEq<i128> for Number {
+    fn eq(&self, other: &i128) -> bool {
+        match self {
+            Number::U8(n) => *n as i128 == *other,
+            Number::U16(n) => *n as i128 == *other,
+            Number::U32(n) => *n as i128 == *other,
+            Number::U64(n) => *n as i128 == *other,
+            Number::U128(n) => {
+                if *n > i128::MAX as u128 {
+                    false
+                } else {
+                    *n as i128 == *other
+                }
+            }
+            Number::I8(n) => *n as i128 == *other,
+            Number::I16(n) => *n as i128 == *other,
+            Number::I32(n) => *n as i128 == *other,
+            Number::I64(n) => *n as i128 == *other,
+            Number::I128(n) => *n as i128 == *other,
+        }
+    }
+}
+
+impl ToTokens for Number {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let lit: syn::LitInt = match self {
+            Number::U8(n) => parse_quote!(#n),
+            Number::U16(n) => parse_quote!(#n),
+            Number::U32(n) => parse_quote!(#n),
+            Number::U64(n) => parse_quote!(#n),
+            Number::U128(n) => parse_quote!(#n),
+            Number::I8(n) => parse_quote!(#n),
+            Number::I16(n) => parse_quote!(#n),
+            Number::I32(n) => parse_quote!(#n),
+            Number::I64(n) => parse_quote!(#n),
+            Number::I128(n) => parse_quote!(#n),
+        };
+        let lit = lit.base10_digits();
+        let clean = syn::parse_str::<syn::LitInt>(lit).unwrap();
+        clean.to_tokens(tokens);
+    }
+}
+
 #[derive(FromField)]
 #[darling(attributes(field), and_then = finish)]
 pub struct Field {
@@ -68,14 +174,14 @@ impl Field {
         let fn_ident = self.get_fn_ident();
         let lsb = self.lsb;
         let msb = self.msb;
-        let abs_field_mask = self.signed_field_mask_nosignbit();
+        let abs_field_mask = self.signed_field_mask_nosignbit(reg_size);
         let ty = self.io_ty(reg_size);
 
         parse_quote! {
             pub fn #fn_ident(&self) -> #ty {
                 let signed = (self.reg >> #msb) & 1;
                 if signed == 1 {
-                    (!(#abs_field_mask >> #lsb) | self.reg & (#abs_field_mask >> #lsb)) as #ty
+                    (!(#abs_field_mask >> #lsb) | (self.reg & #abs_field_mask) >> #lsb) as #ty
                 } else {
                     ((self.reg & #abs_field_mask) >> #lsb) as #ty
                 }
@@ -88,7 +194,7 @@ impl Field {
         let fn_ident = self.get_fn_ident();
         let ty = self.io_ty(reg_size);
         let lsb = self.lsb;
-        let field_mask = self.field_mask();
+        let field_mask = self.field_mask(reg_size);
         parse_quote! {
             pub fn #fn_ident(&self) -> #ty {
                 (self.reg & #field_mask) >> #lsb
@@ -104,17 +210,24 @@ impl Field {
         }
     }
 
-    fn signed_field_mask_nosignbit(&self) -> u32 {
+    fn signed_field_mask_nosignbit(&self, reg_size: usize) -> Number {
         assert!(self.signed);
-        self.field_mask() & !(1 << self.msb)
+        match self.field_mask(reg_size) {
+            Number::U8(n) => Number::U8(n & !(1 << self.msb)),
+            Number::U16(n) => Number::U16(n & !(1 << self.msb)),
+            Number::U32(n) => Number::U32(n & !(1 << self.msb)),
+            Number::U64(n) => Number::U64(n & !(1 << self.msb)),
+            Number::U128(n) => Number::U128(n & !(1 << self.msb)),
+            _ => unreachable!(),
+        }
     }
 
     fn unsigned_set_impl(&self, reg_size: usize) -> ItemFn {
         assert!(!self.signed);
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
-        let field_max = self.field_max();
-        let field_mask = self.field_mask();
+        let field_max = self.field_max(reg_size);
+        let field_mask = self.field_mask(reg_size);
         let lsb = self.lsb;
         parse_quote! {
             pub fn #fn_ident(&mut self, val: #ty) -> registers::Result<()> {
@@ -134,16 +247,18 @@ impl Field {
         assert!(self.signed);
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
-        let field_mask = self.field_mask();
-        let abs_field_mask = self.signed_field_mask_nosignbit();
+        let field_mask = self.field_mask(reg_size);
+        let abs_field_mask = self.signed_field_mask_nosignbit(reg_size);
         let msb = self.msb;
         let lsb = self.lsb;
-        let field_max = self.field_max();
-        let field_min = self.field_min();
+        let field_max = self.field_max(reg_size);
+        let field_min = self.field_min(reg_size);
+        let sign_type = sign(reg_size);
+        let unsign_type = unsign(reg_size);
 
         parse_quote! {
-            pub fn #fn_ident(&mut self, mut val: #ty) -> registers::Result<()> {
-                if val > #field_max as i32 || val < #field_min {
+            pub fn #fn_ident(&mut self, val: #ty) -> registers::Result<()> {
+                if val > #field_max as #sign_type || val < #field_min {
                     return Err(registers::Error::OutOfBoundsFieldWrite);
                 }
 
@@ -154,7 +269,7 @@ impl Field {
                 };
 
                 self.reg = self.reg & !(#field_mask);
-                self.reg = self.reg | signed_bit | ((val as u32 & (#abs_field_mask >> #lsb)) << #lsb);
+                self.reg = self.reg | signed_bit | ((val as #unsign_type & (#abs_field_mask >> #lsb)) << #lsb);
 
                 Ok(())
             }
@@ -169,19 +284,30 @@ impl Field {
         format_ident!("set_{}", self.ident.as_ref().unwrap())
     }
 
-    fn field_max(&self) -> u32 {
-        if self.signed {
-            2u32.pow(self.field_size() as u32 - 1) - 1
-        } else {
-            2u32.pow(self.field_size() as u32) - 1
+    fn field_max(&self, reg_size: usize) -> Number {
+        let offset = if self.signed { 1 } else { 0 };
+        match reg_size {
+            8 => Number::U8(2u8.pow(self.field_size() as u32 - offset) - 1),
+            16 => Number::U16(2u16.pow(self.field_size() as u32 - offset) - 1),
+            32 => Number::U32(2u32.pow(self.field_size() as u32 - offset) - 1),
+            64 => Number::U64(2u64.pow(self.field_size() as u32 - offset) - 1),
+            128 => Number::U128(2u128.pow(self.field_size() as u32 - offset) - 1),
+            _ => unreachable!(),
         }
     }
 
-    fn field_min(&self) -> i32 {
-        if self.signed {
-            !self.field_max() as i32
-        } else {
-            0
+    fn field_min(&self, reg_size: usize) -> Number {
+        if !self.signed {
+            return Number::U8(0);
+        }
+
+        match self.field_max(reg_size) {
+            Number::U8(n) => Number::I8(!n as i8),
+            Number::U16(n) => Number::I16(!n as i16),
+            Number::U32(n) => Number::I32(!n as i32),
+            Number::U64(n) => Number::I64(!n as i64),
+            Number::U128(n) => Number::I128(!n as i128),
+            _ => unreachable!(),
         }
     }
 
@@ -189,8 +315,15 @@ impl Field {
         self.msb - self.lsb + 1
     }
 
-    fn field_mask(&self) -> u32 {
-        (2u32.pow(self.field_size() as u32) - 1) << self.lsb
+    fn field_mask(&self, reg_size: usize) -> Number {
+        match reg_size {
+            8 => Number::U8((2u8.pow(self.field_size() as u32) - 1) << self.lsb),
+            16 => Number::U16((2u16.pow(self.field_size() as u32) - 1) << self.lsb),
+            32 => Number::U32((2u32.pow(self.field_size() as u32) - 1) << self.lsb),
+            64 => Number::U64((2u64.pow(self.field_size() as u32) - 1) << self.lsb),
+            128 => Number::U128((2u128.pow(self.field_size() as u32) - 1) << self.lsb),
+            _ => unreachable!(),
+        }
     }
 
     fn io_ty(&self, reg_size: usize) -> Type {
@@ -223,6 +356,13 @@ impl Field {
                     parse_quote!(u64)
                 }
             }
+            128 => {
+                if self.signed {
+                    parse_quote!(i128)
+                } else {
+                    parse_quote!(u128)
+                }
+            }
             _ => panic!("Invalid register size"),
         }
     }
@@ -240,7 +380,7 @@ mod tests {
             signed: false,
             ..Default::default()
         };
-        assert_eq!(field.field_max(), 15);
+        assert_eq!(field.field_max(32), 15u128);
 
         let field = Field {
             msb: 16,
@@ -248,7 +388,7 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert_eq!(field.field_max(), 63);
+        assert_eq!(field.field_max(32), 63u128);
     }
 
     #[test]
@@ -259,7 +399,7 @@ mod tests {
             signed: false,
             ..Default::default()
         };
-        assert_eq!(field.field_min(), 0);
+        assert_eq!(field.field_min(32), 0u128);
 
         let field = Field {
             msb: 16,
@@ -267,7 +407,7 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert_eq!(field.field_min(), -64);
+        assert_eq!(field.field_min(32), -64i128);
     }
 
     #[test]
@@ -297,7 +437,7 @@ mod tests {
             signed: false,
             ..Default::default()
         };
-        assert_eq!(field.field_mask(), 0b1111);
+        assert_eq!(field.field_mask(32), 0b1111u128);
 
         let field = Field {
             msb: 16,
@@ -305,7 +445,15 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert_eq!(field.field_mask(), 0b1_1111_1100_0000_0000);
+        assert_eq!(field.field_mask(32), 0b1_1111_1100_0000_0000u128);
+
+        let field = Field {
+            msb: 15,
+            lsb: 1,
+            signed: true,
+            ..Default::default()
+        };
+        assert!(matches!(field.field_mask(16), Number::U16(0b1111_1111_1111_1110)));
     }
 
     #[test]
@@ -316,7 +464,7 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert_eq!(field.signed_field_mask_nosignbit(), 0b0111);
+        assert_eq!(field.signed_field_mask_nosignbit(32), 0b0111u128);
 
         let field = Field {
             msb: 16,
@@ -324,7 +472,18 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert_eq!(field.signed_field_mask_nosignbit(), 0b0_1111_1100_0000_0000);
+        assert_eq!(
+            field.signed_field_mask_nosignbit(32),
+            0b0_1111_1100_0000_0000u128
+        );
+
+        let field = Field {
+            msb: 15,
+            lsb: 1,
+            signed: true,
+            ..Default::default()
+        };
+        assert!(matches!(field.signed_field_mask_nosignbit(16), Number::U16(0b0111_1111_1111_1110)));
     }
 
     #[test]

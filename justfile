@@ -2,6 +2,9 @@
 default:
     @just --list
 
+doc:
+    @cargo doc --open
+
 # Build the code
 build:
     @cargo build --workspace
