@@ -1,0 +1,5 @@
+error: expected `,`
+ --> compile-tests/invalid_meta.rs:3:26
+  |
+3 | #[register(size = 16, foo?)]
+  |                          ^
