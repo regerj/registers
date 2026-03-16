@@ -61,7 +61,7 @@ fn verify_args(args: MacroArgs) -> darling::Result<MacroArgs> {
 ///     #[field(lsb = 8, msb = 15, write = false)]
 ///     upper: i,
 /// }
-/// 
+///
 /// let mut reg = MyRegister::new(0x04AD);
 /// assert_eq!(reg.get_lower(), 0xAD);
 /// assert_eq!(reg.get_upper(), 4);
