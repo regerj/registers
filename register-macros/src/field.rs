@@ -25,7 +25,7 @@ impl PartialEq<u128> for Number {
             Number::U16(n) => *n as u128 == *other,
             Number::U32(n) => *n as u128 == *other,
             Number::U64(n) => *n as u128 == *other,
-            Number::U128(n) => *n as u128 == *other,
+            Number::U128(n) => *n == *other,
             Number::I8(n) => {
                 if *n < 0 {
                     false
@@ -83,7 +83,7 @@ impl PartialEq<i128> for Number {
             Number::I16(n) => *n as i128 == *other,
             Number::I32(n) => *n as i128 == *other,
             Number::I64(n) => *n as i128 == *other,
-            Number::I128(n) => *n as i128 == *other,
+            Number::I128(n) => *n == *other,
         }
     }
 }
@@ -453,7 +453,10 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert!(matches!(field.field_mask(16), Number::U16(0b1111_1111_1111_1110)));
+        assert!(matches!(
+            field.field_mask(16),
+            Number::U16(0b1111_1111_1111_1110)
+        ));
     }
 
     #[test]
@@ -483,7 +486,10 @@ mod tests {
             signed: true,
             ..Default::default()
         };
-        assert!(matches!(field.signed_field_mask_nosignbit(16), Number::U16(0b0111_1111_1111_1110)));
+        assert!(matches!(
+            field.signed_field_mask_nosignbit(16),
+            Number::U16(0b0111_1111_1111_1110)
+        ));
     }
 
     #[test]
