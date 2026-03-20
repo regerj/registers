@@ -23,7 +23,7 @@ readme = "README.md"
 
 [dependencies]
 register-macros = { version = "0.0.2", path = "./register-macros/" }
-thiserror = "2.0.18"
+thiserror = { version = "2.0.18", default-features = false }
 
 [dev-dependencies]
 trybuild = "1.0"
