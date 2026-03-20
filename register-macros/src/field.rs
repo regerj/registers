@@ -108,7 +108,7 @@ impl ToTokens for Number {
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Debug)]
 pub enum Typ {
     #[default]
     Unsigned,
@@ -175,7 +175,24 @@ impl Field {
         match self.typ {
             Typ::Signed => self.signed_get_impl(reg_size),
             Typ::Unsigned => self.unsigned_get_impl(reg_size),
-            Typ::Flag => unimplemented!()
+            Typ::Flag => self.flag_get_impl(reg_size),
+        }
+    }
+
+    fn flag_get_impl(&self, reg_size: usize) -> ItemFn {
+        assert_eq!(self.typ, Typ::Flag);
+        let fn_ident = self.get_fn_ident();
+        let ty = self.io_ty(reg_size);
+        let field_mask = self.field_mask(reg_size);
+
+        parse_quote! {
+            pub fn #fn_ident(&self) -> #ty {
+                if (self.reg & #field_mask) != 0 {
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -216,7 +233,24 @@ impl Field {
         match self.typ {
             Typ::Signed => self.signed_set_impl(reg_size),
             Typ::Unsigned => self.unsigned_set_impl(reg_size),
-            Typ::Flag => unimplemented!()
+            Typ::Flag => self.flag_set_impl(reg_size),
+        }
+    }
+
+    pub fn flag_set_impl(&self, reg_size: usize) -> ItemFn {
+        assert!(matches!(self.typ, Typ::Flag));
+        let ty = self.io_ty(reg_size);
+        let fn_ident = self.set_fn_ident();
+        let lsb = self.lsb;
+
+        parse_quote! {
+            pub fn #fn_ident(&mut self, val: #ty) {
+                if val {
+                    self.reg = self.reg | (1 << #lsb);
+                } else {
+                    self.reg = self.reg & !(1 << #lsb);
+                }
+            }
         }
     }
 
@@ -347,41 +381,31 @@ impl Field {
         }
 
         match reg_size {
-            8 => {
-                match self.typ {
-                    Typ::Signed => parse_quote!(i8),
-                    Typ::Unsigned => parse_quote!(u8),
-                    _ => unreachable!(),
-                }
-            }
-            16 => {
-                match self.typ {
-                    Typ::Signed => parse_quote!(i16),
-                    Typ::Unsigned => parse_quote!(u16),
-                    _ => unreachable!(),
-                }
-            }
-            32 => {
-                match self.typ {
-                    Typ::Signed => parse_quote!(i32),
-                    Typ::Unsigned => parse_quote!(u32),
-                    _ => unreachable!(),
-                }
-            }
-            64 => {
-                match self.typ {
-                    Typ::Signed => parse_quote!(i64),
-                    Typ::Unsigned => parse_quote!(u64),
-                    _ => unreachable!(),
-                }
-            }
-            128 => {
-                match self.typ {
-                    Typ::Signed => parse_quote!(i128),
-                    Typ::Unsigned => parse_quote!(u128),
-                    _ => unreachable!(),
-                }
-            }
+            8 => match self.typ {
+                Typ::Signed => parse_quote!(i8),
+                Typ::Unsigned => parse_quote!(u8),
+                _ => unreachable!(),
+            },
+            16 => match self.typ {
+                Typ::Signed => parse_quote!(i16),
+                Typ::Unsigned => parse_quote!(u16),
+                _ => unreachable!(),
+            },
+            32 => match self.typ {
+                Typ::Signed => parse_quote!(i32),
+                Typ::Unsigned => parse_quote!(u32),
+                _ => unreachable!(),
+            },
+            64 => match self.typ {
+                Typ::Signed => parse_quote!(i64),
+                Typ::Unsigned => parse_quote!(u64),
+                _ => unreachable!(),
+            },
+            128 => match self.typ {
+                Typ::Signed => parse_quote!(i128),
+                Typ::Unsigned => parse_quote!(u128),
+                _ => unreachable!(),
+            },
             _ => panic!("Invalid register size"),
         }
     }

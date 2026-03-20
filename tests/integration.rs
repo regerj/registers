@@ -24,6 +24,58 @@ struct NonStandardSigned {
     reserved: u,
 }
 
+#[register(size = 8)]
+struct Status {
+    #[field(lsb = 0, msb = 0)]
+    f0: b,
+    #[field(lsb = 1, msb = 1)]
+    f1: b,
+    #[field(lsb = 2, msb = 2)]
+    f2: b,
+    #[field(lsb = 3, msb = 3)]
+    f3: b,
+    #[field(lsb = 4, msb = 4)]
+    f4: b,
+    #[field(lsb = 5, msb = 5)]
+    f5: b,
+    #[field(lsb = 6, msb = 6)]
+    f6: b,
+    #[field(lsb = 7, msb = 7)]
+    f7: b,
+}
+
+#[test]
+pub fn test_flags() {
+    let mut reg = Status::from(0xF0);
+
+    assert!(!reg.get_f0());
+    assert!(!reg.get_f1());
+    assert!(!reg.get_f2());
+    assert!(!reg.get_f3());
+    assert!(reg.get_f4());
+    assert!(reg.get_f5());
+    assert!(reg.get_f6());
+    assert!(reg.get_f7());
+
+    reg.set_f0(true);
+    reg.set_f1(true);
+    reg.set_f2(true);
+    reg.set_f3(true);
+    reg.set_f4(false);
+    reg.set_f5(false);
+    reg.set_f6(false);
+    reg.set_f7(false);
+
+    assert!(reg.get_f0());
+    assert!(reg.get_f1());
+    assert!(reg.get_f2());
+    assert!(reg.get_f3());
+    assert!(!reg.get_f4());
+    assert!(!reg.get_f5());
+    assert!(!reg.get_f6());
+    assert!(!reg.get_f7());
+}
+
 #[test]
 pub fn test_get() {
     let reg = HIF1::from(0xDEADBEEF);
