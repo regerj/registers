@@ -108,13 +108,21 @@ impl ToTokens for Number {
     }
 }
 
+#[derive(Default, PartialEq)]
+pub enum Typ {
+    #[default]
+    Unsigned,
+    Signed,
+    Flag,
+}
+
 #[derive(FromField)]
 #[darling(attributes(field), and_then = finish)]
 pub struct Field {
     pub ident: Option<syn::Ident>,
     ty: syn::Type,
     #[darling(skip)]
-    pub signed: bool,
+    pub typ: Typ,
     pub msb: usize,
     pub lsb: usize,
     #[darling(default = || true)]
@@ -128,12 +136,14 @@ fn finish(mut field: Field) -> darling::Result<Field> {
         darling::Error::unexpected_type(&field.ty.to_token_stream().to_string())
             .with_span(&field.ty),
     );
-    let signed = match &field.ty {
+    let typ = match &field.ty {
         Type::Path(path) => {
             if path.path.is_ident("u") {
-                false
+                Typ::Unsigned
             } else if path.path.is_ident("i") {
-                true
+                Typ::Signed
+            } else if path.path.is_ident("b") {
+                Typ::Flag
             } else {
                 return error;
             }
@@ -141,7 +151,7 @@ fn finish(mut field: Field) -> darling::Result<Field> {
         _ => return error,
     };
 
-    field.signed = signed;
+    field.typ = typ;
 
     Ok(field)
 }
@@ -151,7 +161,7 @@ impl Default for Field {
         Self {
             ident: None,
             ty: parse_quote!(u),
-            signed: false,
+            typ: Typ::default(),
             msb: 15,
             lsb: 0,
             write: true,
@@ -162,15 +172,15 @@ impl Default for Field {
 
 impl Field {
     pub fn get_impl(&self, reg_size: usize) -> ItemFn {
-        if self.signed {
-            self.signed_get_impl(reg_size)
-        } else {
-            self.unsigned_get_impl(reg_size)
+        match self.typ {
+            Typ::Signed => self.signed_get_impl(reg_size),
+            Typ::Unsigned => self.unsigned_get_impl(reg_size),
+            Typ::Flag => unimplemented!()
         }
     }
 
     fn signed_get_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(self.signed);
+        assert!(matches!(self.typ, Typ::Signed));
         let fn_ident = self.get_fn_ident();
         let lsb = self.lsb;
         let msb = self.msb;
@@ -190,7 +200,7 @@ impl Field {
     }
 
     fn unsigned_get_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(!self.signed);
+        assert!(matches!(self.typ, Typ::Unsigned));
         let fn_ident = self.get_fn_ident();
         let ty = self.io_ty(reg_size);
         let lsb = self.lsb;
@@ -203,15 +213,15 @@ impl Field {
     }
 
     pub fn set_impl(&self, reg_size: usize) -> ItemFn {
-        if self.signed {
-            self.signed_set_impl(reg_size)
-        } else {
-            self.unsigned_set_impl(reg_size)
+        match self.typ {
+            Typ::Signed => self.signed_set_impl(reg_size),
+            Typ::Unsigned => self.unsigned_set_impl(reg_size),
+            Typ::Flag => unimplemented!()
         }
     }
 
     fn signed_field_mask_nosignbit(&self, reg_size: usize) -> Number {
-        assert!(self.signed);
+        assert!(matches!(self.typ, Typ::Signed));
         match self.field_mask(reg_size) {
             Number::U8(n) => Number::U8(n & !(1 << self.msb)),
             Number::U16(n) => Number::U16(n & !(1 << self.msb)),
@@ -223,7 +233,7 @@ impl Field {
     }
 
     fn unsigned_set_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(!self.signed);
+        assert!(matches!(self.typ, Typ::Unsigned));
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_max = self.field_max(reg_size);
@@ -244,7 +254,7 @@ impl Field {
     }
 
     fn signed_set_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(self.signed);
+        assert!(matches!(self.typ, Typ::Signed));
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_mask = self.field_mask(reg_size);
@@ -285,7 +295,11 @@ impl Field {
     }
 
     fn field_max(&self, reg_size: usize) -> Number {
-        let offset = if self.signed { 1 } else { 0 };
+        let offset = match self.typ {
+            Typ::Unsigned => 0,
+            Typ::Signed => 1,
+            Typ::Flag => unimplemented!(),
+        };
         match reg_size {
             8 => Number::U8(2u8.pow(self.field_size() as u32 - offset) - 1),
             16 => Number::U16(2u16.pow(self.field_size() as u32 - offset) - 1),
@@ -297,7 +311,8 @@ impl Field {
     }
 
     fn field_min(&self, reg_size: usize) -> Number {
-        if !self.signed {
+        assert!(matches!(self.typ, Typ::Signed | Typ::Unsigned));
+        if self.typ == Typ::Unsigned {
             return Number::U8(0);
         }
 
@@ -327,40 +342,44 @@ impl Field {
     }
 
     fn io_ty(&self, reg_size: usize) -> Type {
+        if self.typ == Typ::Flag {
+            return parse_quote!(bool);
+        }
+
         match reg_size {
             8 => {
-                if self.signed {
-                    parse_quote!(i8)
-                } else {
-                    parse_quote!(u8)
+                match self.typ {
+                    Typ::Signed => parse_quote!(i8),
+                    Typ::Unsigned => parse_quote!(u8),
+                    _ => unreachable!(),
                 }
             }
             16 => {
-                if self.signed {
-                    parse_quote!(i16)
-                } else {
-                    parse_quote!(u16)
+                match self.typ {
+                    Typ::Signed => parse_quote!(i16),
+                    Typ::Unsigned => parse_quote!(u16),
+                    _ => unreachable!(),
                 }
             }
             32 => {
-                if self.signed {
-                    parse_quote!(i32)
-                } else {
-                    parse_quote!(u32)
+                match self.typ {
+                    Typ::Signed => parse_quote!(i32),
+                    Typ::Unsigned => parse_quote!(u32),
+                    _ => unreachable!(),
                 }
             }
             64 => {
-                if self.signed {
-                    parse_quote!(i64)
-                } else {
-                    parse_quote!(u64)
+                match self.typ {
+                    Typ::Signed => parse_quote!(i64),
+                    Typ::Unsigned => parse_quote!(u64),
+                    _ => unreachable!(),
                 }
             }
             128 => {
-                if self.signed {
-                    parse_quote!(i128)
-                } else {
-                    parse_quote!(u128)
+                match self.typ {
+                    Typ::Signed => parse_quote!(i128),
+                    Typ::Unsigned => parse_quote!(u128),
+                    _ => unreachable!(),
                 }
             }
             _ => panic!("Invalid register size"),
@@ -377,7 +396,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            signed: false,
+            typ: Typ::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_max(32), 15u128);
@@ -385,7 +404,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_max(32), 63u128);
@@ -396,7 +415,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            signed: false,
+            typ: Typ::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_min(32), 0u128);
@@ -404,7 +423,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_min(32), -64i128);
@@ -415,7 +434,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            signed: false,
+            typ: Typ::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_size(), 4);
@@ -423,7 +442,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_size(), 7);
@@ -434,7 +453,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            signed: false,
+            typ: Typ::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_mask(32), 0b1111u128);
@@ -442,7 +461,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_mask(32), 0b1_1111_1100_0000_0000u128);
@@ -450,7 +469,7 @@ mod tests {
         let field = Field {
             msb: 15,
             lsb: 1,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert!(matches!(
@@ -464,7 +483,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(field.signed_field_mask_nosignbit(32), 0b0111u128);
@@ -472,7 +491,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert_eq!(
@@ -483,7 +502,7 @@ mod tests {
         let field = Field {
             msb: 15,
             lsb: 1,
-            signed: true,
+            typ: Typ::Signed,
             ..Default::default()
         };
         assert!(matches!(
@@ -503,7 +522,7 @@ mod tests {
         assert_eq!(field.ident.map(|i| i.to_string()), Some("foo".to_string()));
         assert_eq!(field.lsb, 0);
         assert_eq!(field.msb, 15);
-        assert!(field.signed);
+        assert!(field.typ == Typ::Signed);
 
         let field: syn::Field = parse_quote! {
             #[field(lsb = 0, msb = 15)]
