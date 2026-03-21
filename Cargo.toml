@@ -3,7 +3,7 @@ resolver = "3"
 members = [ "register-macros" ]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 authors = [ "Jacob Reger <regerjacob@gmail.com>" ]
 description = "A simple library for working with registers in Rust."
 license = "MIT"
