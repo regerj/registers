@@ -93,6 +93,41 @@
 //! # }
 //! ```
 //!
+//! This library also supports flags in registers. Take for example the x86_64 register cr3:
+//!
+//! | Bits 63-12 | Bit 4              | Bit 3              |
+//! | ---------- | -------------------| ------------------ |
+//! | Pgdir Base | Page Cache Disable | Page Write Through |
+//!
+//! ```
+//! # use registers::register;
+//! #[register(size = 64)]
+//! struct CR3 {
+//!     #[field(msb = 63, lsb = 12)]
+//!     pgdir_base: u,
+//!     #[field(msb = 4, lsb = 4)]
+//!     pg_cache_disable: b,
+//!     #[field(msb = 3, lsb = 3)]
+//!     pg_write_thru: b,
+//! }
+//!
+//! # fn main() -> registers::Result<()> {
+//! let mut cr3 = CR3::new();
+//! cr3.set_pg_cache_disable(true);
+//! cr3.set_pg_write_thru(false);
+//! cr3.set_pgdir_base(0xDEADBEEF)?;
+//!
+//! assert!(cr3.get_pg_cache_disable());
+//! assert!(!cr3.get_pg_write_thru());
+//! assert_eq!(cr3.get_pgdir_base(), 0xDEADBEEF);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! You could, of course, still use unsigned type for flags. However, using the dedicated boolean
+//! flag type means that the APIs get ergonomic `bool` parameters and return types, and since it is
+//! impossible for an out-of-bounds write with a bool, the set methods do not fail.
+//!
 //! # Knobs
 //!
 //! Fields must be specified as one of the following types:
@@ -101,6 +136,7 @@
 //! | ---- | ---------------------- |
 //! | u    | Unsigned               |
 //! | i    | Signed (2s complement) |
+//! | b    | Flag (boolean)         |
 //!
 //! The `register` attribute supports the following metadata:
 //!
@@ -108,8 +144,7 @@
 //! | ----- | -------- | ----------- |
 //! | size  | True     | Size of register in bits |
 //! | read  | False    | Whether this register is readable from memory, controls the .read() method, defaults to true |
-//! | write | False    | Whether this register is writeable from memory, controls the .write()
-//! method, defaults to true |
+//! | write | False    | Whether this register is writeable from memory, controls the .write() method, defaults to true |
 //!
 //! Each `field` attribute supports the following metadata:
 //!
