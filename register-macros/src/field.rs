@@ -109,7 +109,7 @@ impl ToTokens for Number {
 }
 
 #[derive(Default, PartialEq, Debug)]
-pub enum Typ {
+pub enum FieldTy {
     #[default]
     Unsigned,
     Signed,
@@ -122,7 +122,7 @@ pub struct Field {
     pub ident: Option<syn::Ident>,
     ty: syn::Type,
     #[darling(skip)]
-    pub typ: Typ,
+    pub typ: FieldTy,
     pub msb: usize,
     pub lsb: usize,
     #[darling(default = || true)]
@@ -139,9 +139,9 @@ fn finish(mut field: Field) -> darling::Result<Field> {
     let typ = match &field.ty {
         Type::Path(path) => {
             if path.path.is_ident("u") {
-                Typ::Unsigned
+                FieldTy::Unsigned
             } else if path.path.is_ident("i") {
-                Typ::Signed
+                FieldTy::Signed
             } else if path.path.is_ident("b") {
                 if field.lsb != field.msb {
                     return Err(darling::Error::custom(
@@ -149,7 +149,7 @@ fn finish(mut field: Field) -> darling::Result<Field> {
                     )
                     .with_span(&field.msb));
                 }
-                Typ::Flag
+                FieldTy::Flag
             } else {
                 return error;
             }
@@ -167,7 +167,7 @@ impl Default for Field {
         Self {
             ident: None,
             ty: parse_quote!(u),
-            typ: Typ::default(),
+            typ: FieldTy::default(),
             msb: 15,
             lsb: 0,
             write: true,
@@ -179,14 +179,14 @@ impl Default for Field {
 impl Field {
     pub fn get_impl(&self, reg_size: usize) -> ItemFn {
         match self.typ {
-            Typ::Signed => self.signed_get_impl(reg_size),
-            Typ::Unsigned => self.unsigned_get_impl(reg_size),
-            Typ::Flag => self.flag_get_impl(reg_size),
+            FieldTy::Signed => self.signed_get_impl(reg_size),
+            FieldTy::Unsigned => self.unsigned_get_impl(reg_size),
+            FieldTy::Flag => self.flag_get_impl(reg_size),
         }
     }
 
     fn flag_get_impl(&self, reg_size: usize) -> ItemFn {
-        assert_eq!(self.typ, Typ::Flag);
+        assert_eq!(self.typ, FieldTy::Flag);
         let fn_ident = self.get_fn_ident();
         let ty = self.io_ty(reg_size);
         let field_mask = self.field_mask(reg_size);
@@ -203,7 +203,7 @@ impl Field {
     }
 
     fn signed_get_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(matches!(self.typ, Typ::Signed));
+        assert!(matches!(self.typ, FieldTy::Signed));
         let fn_ident = self.get_fn_ident();
         let lsb = self.lsb;
         let msb = self.msb;
@@ -223,7 +223,7 @@ impl Field {
     }
 
     fn unsigned_get_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(matches!(self.typ, Typ::Unsigned));
+        assert!(matches!(self.typ, FieldTy::Unsigned));
         let fn_ident = self.get_fn_ident();
         let ty = self.io_ty(reg_size);
         let lsb = self.lsb;
@@ -237,14 +237,14 @@ impl Field {
 
     pub fn set_impl(&self, reg_size: usize) -> ItemFn {
         match self.typ {
-            Typ::Signed => self.signed_set_impl(reg_size),
-            Typ::Unsigned => self.unsigned_set_impl(reg_size),
-            Typ::Flag => self.flag_set_impl(reg_size),
+            FieldTy::Signed => self.signed_set_impl(reg_size),
+            FieldTy::Unsigned => self.unsigned_set_impl(reg_size),
+            FieldTy::Flag => self.flag_set_impl(reg_size),
         }
     }
 
     pub fn flag_set_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(matches!(self.typ, Typ::Flag));
+        assert!(matches!(self.typ, FieldTy::Flag));
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let lsb = self.lsb;
@@ -261,7 +261,7 @@ impl Field {
     }
 
     fn signed_field_mask_nosignbit(&self, reg_size: usize) -> Number {
-        assert!(matches!(self.typ, Typ::Signed));
+        assert!(matches!(self.typ, FieldTy::Signed));
         match self.field_mask(reg_size) {
             Number::U8(n) => Number::U8(n & !(1 << self.msb)),
             Number::U16(n) => Number::U16(n & !(1 << self.msb)),
@@ -273,7 +273,7 @@ impl Field {
     }
 
     fn unsigned_set_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(matches!(self.typ, Typ::Unsigned));
+        assert!(matches!(self.typ, FieldTy::Unsigned));
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_max = self.field_max(reg_size);
@@ -294,7 +294,7 @@ impl Field {
     }
 
     fn signed_set_impl(&self, reg_size: usize) -> ItemFn {
-        assert!(matches!(self.typ, Typ::Signed));
+        assert!(matches!(self.typ, FieldTy::Signed));
         let ty = self.io_ty(reg_size);
         let fn_ident = self.set_fn_ident();
         let field_mask = self.field_mask(reg_size);
@@ -336,9 +336,9 @@ impl Field {
 
     fn field_max(&self, reg_size: usize) -> Number {
         let offset = match self.typ {
-            Typ::Unsigned => 0,
-            Typ::Signed => 1,
-            Typ::Flag => unimplemented!(),
+            FieldTy::Unsigned => 0,
+            FieldTy::Signed => 1,
+            FieldTy::Flag => unimplemented!(),
         };
         match reg_size {
             8 => Number::U8(2u8.pow(self.field_size() as u32 - offset) - 1),
@@ -351,8 +351,8 @@ impl Field {
     }
 
     fn field_min(&self, reg_size: usize) -> Number {
-        assert!(matches!(self.typ, Typ::Signed | Typ::Unsigned));
-        if self.typ == Typ::Unsigned {
+        assert!(matches!(self.typ, FieldTy::Signed | FieldTy::Unsigned));
+        if self.typ == FieldTy::Unsigned {
             return Number::U8(0);
         }
 
@@ -382,34 +382,34 @@ impl Field {
     }
 
     fn io_ty(&self, reg_size: usize) -> Type {
-        if self.typ == Typ::Flag {
+        if self.typ == FieldTy::Flag {
             return parse_quote!(bool);
         }
 
         match reg_size {
             8 => match self.typ {
-                Typ::Signed => parse_quote!(i8),
-                Typ::Unsigned => parse_quote!(u8),
+                FieldTy::Signed => parse_quote!(i8),
+                FieldTy::Unsigned => parse_quote!(u8),
                 _ => unreachable!(),
             },
             16 => match self.typ {
-                Typ::Signed => parse_quote!(i16),
-                Typ::Unsigned => parse_quote!(u16),
+                FieldTy::Signed => parse_quote!(i16),
+                FieldTy::Unsigned => parse_quote!(u16),
                 _ => unreachable!(),
             },
             32 => match self.typ {
-                Typ::Signed => parse_quote!(i32),
-                Typ::Unsigned => parse_quote!(u32),
+                FieldTy::Signed => parse_quote!(i32),
+                FieldTy::Unsigned => parse_quote!(u32),
                 _ => unreachable!(),
             },
             64 => match self.typ {
-                Typ::Signed => parse_quote!(i64),
-                Typ::Unsigned => parse_quote!(u64),
+                FieldTy::Signed => parse_quote!(i64),
+                FieldTy::Unsigned => parse_quote!(u64),
                 _ => unreachable!(),
             },
             128 => match self.typ {
-                Typ::Signed => parse_quote!(i128),
-                Typ::Unsigned => parse_quote!(u128),
+                FieldTy::Signed => parse_quote!(i128),
+                FieldTy::Unsigned => parse_quote!(u128),
                 _ => unreachable!(),
             },
             _ => panic!("Invalid register size"),
@@ -426,7 +426,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            typ: Typ::Unsigned,
+            typ: FieldTy::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_max(32), 15u128);
@@ -434,7 +434,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_max(32), 63u128);
@@ -445,7 +445,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            typ: Typ::Unsigned,
+            typ: FieldTy::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_min(32), 0u128);
@@ -453,7 +453,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_min(32), -64i128);
@@ -464,7 +464,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            typ: Typ::Unsigned,
+            typ: FieldTy::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_size(), 4);
@@ -472,7 +472,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_size(), 7);
@@ -483,7 +483,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            typ: Typ::Unsigned,
+            typ: FieldTy::Unsigned,
             ..Default::default()
         };
         assert_eq!(field.field_mask(32), 0b1111u128);
@@ -491,7 +491,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(field.field_mask(32), 0b1_1111_1100_0000_0000u128);
@@ -499,7 +499,7 @@ mod tests {
         let field = Field {
             msb: 15,
             lsb: 1,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert!(matches!(
@@ -513,7 +513,7 @@ mod tests {
         let field = Field {
             msb: 3,
             lsb: 0,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(field.signed_field_mask_nosignbit(32), 0b0111u128);
@@ -521,7 +521,7 @@ mod tests {
         let field = Field {
             msb: 16,
             lsb: 10,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert_eq!(
@@ -532,7 +532,7 @@ mod tests {
         let field = Field {
             msb: 15,
             lsb: 1,
-            typ: Typ::Signed,
+            typ: FieldTy::Signed,
             ..Default::default()
         };
         assert!(matches!(
@@ -552,7 +552,7 @@ mod tests {
         assert_eq!(field.ident.map(|i| i.to_string()), Some("foo".to_string()));
         assert_eq!(field.lsb, 0);
         assert_eq!(field.msb, 15);
-        assert!(field.typ == Typ::Signed);
+        assert!(field.typ == FieldTy::Signed);
 
         let field: syn::Field = parse_quote! {
             #[field(lsb = 0, msb = 15)]
