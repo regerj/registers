@@ -143,6 +143,12 @@ fn finish(mut field: Field) -> darling::Result<Field> {
             } else if path.path.is_ident("i") {
                 Typ::Signed
             } else if path.path.is_ident("b") {
+                if field.lsb != field.msb {
+                    return Err(darling::Error::custom(
+                        "lsb and msb must be equal for flag type fields",
+                    )
+                    .with_span(&field.msb));
+                }
                 Typ::Flag
             } else {
                 return error;
